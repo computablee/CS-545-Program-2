@@ -13,23 +13,28 @@
  * 64GB DDR3
  * Nvidia Quadro K4200
  *
- * [Program description]
+ * This program is a miniature game written in OpenGL. You move a sphere with WASD into a box, whose position is random on the board.
+ * Moving the sphere into the box triggers text to appear saying "You win!" You can also speed up and slow down the animation of the sphere.
  *
  * Controls:
- * [controls]
- * 
- *  esc  : Quit
+ *   W  - move up
+ *   A  - move left
+ *   S  - move down
+ *   D  - move right
+ *   +  - speed up the animation
+ *   -  - slow down the animation
+ *  esc - Quit
  */
 
 //Just some libraries we're gonna be using
 #include <stdio.h>
 #include <stdlib.h>
-#define _USE_MATH_DEFINES
-#include <math.h>
 #include <time.h>
 #include <stdbool.h>
 #include <GL/glew.h>
 #include <GL/freeglut.h>
+
+#define FRAME_COUNT 5
 
 //struct for passing around coordinates
 //just a handy thing to have
@@ -40,9 +45,7 @@ typedef struct
 	int y;
 } coords;
 
-//parameters to be passed to glutTimerFunc
-//"but wait, Lane, you can only provide an int as the parameter to glutTimerFunc!"
-//you might be in physical pain when you see what I have planned
+//parameters to be used with glutTimerFunc
 typedef struct
 {
 	int frames;
@@ -60,65 +63,91 @@ coords sphere_coords = {
 	.y = 250
 };
 
-//how many frames across which we're animating
-int frame_count = 5;
-
 //parameters used for the animation of the sphere
 params sphere_params;
 
 //milliseconds it takes to complete the animation
 int animation_time = 20;
 
+//boolean for winning, determines if we need to accept further input or not
+bool won = false;
+
 //Handler for drawing the scene
 void drawScene(void)
 {
+	//clear color and depth buffer, set color to that same pretty purple I used in the previous program
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glColor3f(0.7f, 0.0f, 1.0f);
+
+	//translate and draw the cube
 	glLoadIdentity();
 	glTranslatef((float)cube_coords.x, (float)cube_coords.y, 0.0);
 	glutWireCube(50);
 	glPopMatrix();
+
+	//translate and draw the sphere
 	glLoadIdentity();
 	glTranslatef((float)sphere_coords.x, (float)sphere_coords.y, 0.0);
 	glutWireSphere(15, 16, 16);
 	glPopMatrix();
 
+	//if we've won
+	if (won)
+	{
+		//set color to black, set raster position, and write "You won!" to the screen
+		//I saw that glutBitmapString existed so I decided to use it instead of writing my own and using glutBitmapCharacter
+		glColor3f(0.0f, 0.0f, 0.0f);
+		glLoadIdentity();
+		glRasterPos3f(200.0f, 400.0f, 0.0f);
+		glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "You won!");
+		glPopMatrix();
+	}
 	
 	//Swap buffers because of double buffering
 	glutSwapBuffers();
 }
 
-void alter_sphere(int _)
-{
-
-	sphere_coords.x += (sphere_params.new.x - sphere_params.old.x) / frame_count;
-	sphere_coords.y += (sphere_params.new.y - sphere_params.old.y) / frame_count;
-
-	glutPostRedisplay();
-
-	sphere_params.frames--;
-	
-	if (sphere_params.frames != 0)
-		glutTimerFunc(animation_time, alter_sphere, _);
-}
-
-void animate(coords old, coords new)
-{
-	sphere_params = (params){ .frames = frame_count, .old = old, .new = new };
-	
-	//owch, that cast hurts me to my core
-	glutTimerFunc(animation_time, alter_sphere, (int)NULL);
-}
-
 bool sphitsp(coords cube, coords sphere)
 {
+	//check for collision
 	return sphere.x < cube.x + 25 && sphere.x > cube.x - 25 &&
 		sphere.y < cube.y + 25 && sphere.y > cube.y - 25;
 }
 
-int win(void)
+void win(void)
 {
-	return 0;
+	//set the win boolean and redraw
+	won = true;
+	glutPostRedisplay();
+}
+
+void alter_sphere(int _)
+{
+	//translate the sphere's coordinates based on the frame count
+	sphere_coords.x += (sphere_params.new.x - sphere_params.old.x) / FRAME_COUNT;
+	sphere_coords.y += (sphere_params.new.y - sphere_params.old.y) / FRAME_COUNT;
+
+	//draw the screen
+	glutPostRedisplay();
+
+	//decrease the frames remaining in the animation
+	sphere_params.frames--;
+
+	//if we're not out of frames in the animation, set a timer for the next frame draw
+	//if we ARE out of frames, check for collision and trigger the win() function if there is collision
+	if (sphere_params.frames != 0)
+		glutTimerFunc(animation_time, alter_sphere, _);
+	else if (sphitsp(cube_coords, sphere_coords))
+		win();
+}
+
+void animate(coords old, coords new)
+{
+	//set the remaining frames to FRAME_COUNT and set the old and new positions for the sphere
+	sphere_params = (params){ .frames = FRAME_COUNT, .old = old, .new = new };
+	
+	//call the timer func
+	glutTimerFunc(animation_time, alter_sphere, (int)NULL);
 }
 
 //Resizing handler
@@ -136,16 +165,16 @@ void resize(int width, int height)
 //Set up the vertex array for drawing
 void setup(void)
 {
-	//Disable warning "Random number generator seeded with a disallowed source of seed value will generate a predictable sequence of values."
-#pragma warning(push)
-#pragma warning(disable:4083)
 	//Seed RNG
 	srand((unsigned int)time(NULL));
-#pragma warning(pop)
 
-	//Generate cube coordinates
-	cube_coords.x = rand() % 500;
-	cube_coords.y = rand() % 500;
+	//Repeat if we accidentally generate a board in winning position
+	do
+	{
+		//Generate cube coordinates
+		cube_coords.x = rand() % 400 + 50;
+		cube_coords.y = rand() % 400 + 50;
+	} while (sphitsp(cube_coords, sphere_coords));
 	
 	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 }
@@ -153,8 +182,8 @@ void setup(void)
 //Handler for ASCII input
 void keyInput(unsigned char key, int x, int y)
 {
-	if (sphere_params.frames != 0)
-		return; //curretly in the middle of an animation, don't handle input right now
+	if (sphere_params.frames != 0 || won)
+		return; //either curretly in the middle of an animation, or user has already won. either way, don't handle input right now
 	
 	switch (key)
 	{
@@ -192,9 +221,6 @@ void keyInput(unsigned char key, int x, int y)
 		exit(0);
 	default: break;
 	}
-
-	//didn't wanna use if, decided to use && instead
-	sphitsp(cube_coords, sphere_coords) && win();
 }
 
 int main(int argc, char **argv)
