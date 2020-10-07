@@ -31,34 +31,85 @@
 #include <GL/glew.h>
 #include <GL/freeglut.h>
 
+//struct for passing around coordinates
+//just a handy thing to have
+//now if only we had the JavaScript spread operator, we could make drawing a lot easier
 typedef struct
 {
 	int x;
 	int y;
 } coords;
 
+//parameters to be passed to glutTimerFunc
+//"but wait, Lane, you can only provide an int as the parameter to glutTimerFunc!"
+//you might be in physical pain when you see what I have planned
+typedef struct
+{
+	int frames;
+	coords old;
+	coords new;
+} params;
+
+//coordinates for the cube
 coords cube_coords;
 
+//coordinates for the sphere
+//and behold: a C feature that's not supported in standard C++!
 coords sphere_coords = {
 	.x = 250,
 	.y = 250
 };
 
+int frame_count = 5; //how many frames across which we're animating
+
+//parameters used for the animation of the sphere
+params sphere_params;
+
 //Handler for drawing the scene
 void drawScene(void)
 {
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glColor3f(0.7f, 0.0f, 1.0f);
+	glLoadIdentity();
+	glTranslatef((float)cube_coords.x, (float)cube_coords.y, 0.0);
+	glutWireCube(50);
+	glPopMatrix();
+	glLoadIdentity();
+	glTranslatef((float)sphere_coords.x, (float)sphere_coords.y, 0.0);
+	glutWireSphere(15, 16, 16);
+	glPopMatrix();
+
 	
+	//Swap buffers because of double buffering
+	glutSwapBuffers();
+}
+
+void alter_sphere(int _)
+{
+
+	sphere_coords.x += (sphere_params.new.x - sphere_params.old.x) / frame_count;
+	sphere_coords.y += (sphere_params.new.y - sphere_params.old.y) / frame_count;
+
+	glutPostRedisplay();
+
+	sphere_params.frames--;
+	
+	if (sphere_params.frames != 0)
+		glutTimerFunc(20, alter_sphere, _);
 }
 
 void animate(coords old, coords new)
 {
+	sphere_params = (params){ .frames = frame_count, .old = old, .new = new };
 	
+	//owch, that cast hurts me to my core
+	glutTimerFunc(20, alter_sphere, (int)NULL);
 }
 
 bool sphitsp(coords cube, coords sphere)
 {
-	return (sphere.x < cube.x + 25 && sphere.x > cube.x - 25 &&
-		sphere.y < cube.y + 25 && sphere.y > cube.y - 25);
+	return sphere.x < cube.x + 25 && sphere.x > cube.x - 25 &&
+		sphere.y < cube.y + 25 && sphere.y > cube.y - 25;
 }
 
 int win(void)
@@ -82,7 +133,8 @@ void resize(int width, int height)
 void setup(void)
 {
 	//Disable warning "Random number generator seeded with a disallowed source of seed value will generate a predictable sequence of values."
-#pragma warning(push, disable:4083)
+#pragma warning(push)
+#pragma warning(disable:4083)
 	//Seed RNG
 	srand((unsigned int)time(NULL));
 #pragma warning(pop)
@@ -90,33 +142,38 @@ void setup(void)
 	//Generate cube coordinates
 	cube_coords.x = rand() % 500;
 	cube_coords.y = rand() % 500;
+	
+	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 }
 
 //Handler for ASCII input
 void keyInput(unsigned char key, int x, int y)
 {
+	if (sphere_params.frames != 0)
+		return; //curretly in the middle of an animation, don't handle input right now
+	
 	switch (key)
 	{
 		//if w, animate upwards and update the coordinates
 	case 'w':
-		animate(cube_coords, (coords){ cube_coords.x + 10, cube_coords.y });
-		cube_coords.x += 10;
+		animate(sphere_coords, (coords){ sphere_coords.x, sphere_coords.y + 10 });
 		glutPostRedisplay();
+		break;
 		//if s, animate downwards and update the coordinates
 	case 's':
-		animate(cube_coords, (coords) { cube_coords.x - 10, cube_coords.y });
-		cube_coords.x -= 10;
+		animate(sphere_coords, (coords) { sphere_coords.x, sphere_coords.y - 10 });
 		glutPostRedisplay();
+		break;
 		//if a, animate left and update the coordinates
 	case 'a':
-		animate(cube_coords, (coords) { cube_coords.x, cube_coords.y - 10 });
-		cube_coords.y -= 10;
+		animate(sphere_coords, (coords) { sphere_coords.x - 10, sphere_coords.y });
 		glutPostRedisplay();
+		break;
 		//if d, animate right and update the coordinates
 	case 'd':
-		animate(cube_coords, (coords) { cube_coords.x, cube_coords.y + 10 });
-		cube_coords.y += 10;
+		animate(sphere_coords, (coords) { sphere_coords.x + 10, sphere_coords.y });
 		glutPostRedisplay();
+		break;
 		//If escape, quit
 	case 27:
 		exit(0);
@@ -148,7 +205,7 @@ int main(int argc, char **argv)
 	glutInitContextProfile(GLUT_COMPATIBILITY_PROFILE);
 
 	//Set the window options, like display mode, size, position, and text
-	glutInitDisplayMode(GLUT_SINGLE | GLUT_RGBA);
+	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
 	glutInitWindowSize(500, 500);
 	glutInitWindowPosition(100, 100);
 	glutCreateWindow("hey mom i made a game without an engine :o");
