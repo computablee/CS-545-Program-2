@@ -60,10 +60,14 @@ coords sphere_coords = {
 	.y = 250
 };
 
-int frame_count = 5; //how many frames across which we're animating
+//how many frames across which we're animating
+int frame_count = 5;
 
 //parameters used for the animation of the sphere
 params sphere_params;
+
+//milliseconds it takes to complete the animation
+int animation_time = 20;
 
 //Handler for drawing the scene
 void drawScene(void)
@@ -95,7 +99,7 @@ void alter_sphere(int _)
 	sphere_params.frames--;
 	
 	if (sphere_params.frames != 0)
-		glutTimerFunc(20, alter_sphere, _);
+		glutTimerFunc(animation_time, alter_sphere, _);
 }
 
 void animate(coords old, coords new)
@@ -103,7 +107,7 @@ void animate(coords old, coords new)
 	sphere_params = (params){ .frames = frame_count, .old = old, .new = new };
 	
 	//owch, that cast hurts me to my core
-	glutTimerFunc(20, alter_sphere, (int)NULL);
+	glutTimerFunc(animation_time, alter_sphere, (int)NULL);
 }
 
 bool sphitsp(coords cube, coords sphere)
@@ -174,6 +178,15 @@ void keyInput(unsigned char key, int x, int y)
 		animate(sphere_coords, (coords) { sphere_coords.x + 10, sphere_coords.y });
 		glutPostRedisplay();
 		break;
+		//if +, increase the animation speed
+	case '+':
+		animation_time -= 5;
+		animation_time < 5 && (animation_time = 5); //limit on 5 milliseconds
+		break;
+		//if -, decrease the animation speed
+	case '-':
+		animation_time += 5;
+		break;
 		//If escape, quit
 	case 27:
 		exit(0);
@@ -182,16 +195,6 @@ void keyInput(unsigned char key, int x, int y)
 
 	//didn't wanna use if, decided to use && instead
 	sphitsp(cube_coords, sphere_coords) && win();
-}
-
-//Handler for non-ASCII input
-void specialKeyInput(int key, int x, int y)
-{
-	switch (key)
-	{
-	default:
-		break;
-	}
 }
 
 int main(int argc, char **argv)
@@ -214,7 +217,6 @@ int main(int argc, char **argv)
 	glutDisplayFunc(drawScene);
 	glutReshapeFunc(resize);
 	glutKeyboardFunc(keyInput);
-	glutSpecialFunc(specialKeyInput);
 
 	//Set this because glew doesn't like it when you don't, and initialize glew
 	glewExperimental = GL_TRUE;
